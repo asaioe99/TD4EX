@@ -91,8 +91,12 @@ void add_a_im() {
 void mov_a_b() {
   int32_t tmp = rom[reg_pc] & 0b00001111;
   reg_a = reg_b + tmp;
-  c_flag = 0;
-  reg_a = reg_a % 16;
+  if (reg_a > 0b1111) {
+    c_flag = 1;
+    reg_a = reg_a % 16;
+  } else {
+    c_flag = 0;
+  }
   reg_pc = (++reg_pc) % 16;
 }
 void in_a_im() {
@@ -109,8 +113,12 @@ void mov_a_im() {
 void mov_b_a() {
   int32_t tmp = rom[reg_pc] & 0b00001111;
   reg_b = reg_a + tmp;
-  c_flag = 0;
-  reg_b = reg_b % 16;
+  if (reg_b > 0b1111) {
+    c_flag = 1;
+    reg_b = reg_b % 16;
+  } else {
+    c_flag = 0;
+  }
   reg_pc = (++reg_pc) % 16;
 }
 void add_b_im() {
@@ -440,7 +448,7 @@ void loop() {
   if (speed == 1) {
     delay(1000);
   }
-  if (ram[0] > 3) {
+  if (ram[0] > 0b0111) {
     lcd_display();
     lcd.setCursor(19, 0);
     lcd.print("*");
