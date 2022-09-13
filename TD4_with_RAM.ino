@@ -156,8 +156,12 @@ void pop_a() {
   int32_t tmp = rom[reg_pc] & 0b00001111;
   reg_sp = (++reg_sp) % 16;
   reg_a = ram[reg_sp] + tmp;
-  reg_a = reg_a % 16;
-  c_flag = 0;
+  if (reg_a > 0b1111) {
+    c_flag = 1;
+    reg_a = reg_a % 16;
+  } else {
+    c_flag = 0;
+  }
   reg_pc = (++reg_pc) % 16;
 }
 void out_im_a() {
