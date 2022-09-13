@@ -138,6 +138,7 @@ void mov_b_im() {
 void push_a() {
   int32_t tmp = rom[reg_pc] & 0b00001111;
   ram[reg_sp] = reg_a + tmp;
+  ram[reg_sp] = ram[reg_sp] % 16;
   if (reg_sp > 0) {
     reg_sp--;
   } else {
@@ -155,6 +156,7 @@ void pop_a() {
   int32_t tmp = rom[reg_pc] & 0b00001111;
   reg_sp = (++reg_sp) % 16;
   reg_a = ram[reg_sp] + tmp;
+  reg_a = reg_a % 16;
   c_flag = 0;
   reg_pc = (++reg_pc) % 16;
 }
