@@ -1,17 +1,19 @@
 #include <LiquidCrystal_I2C.h>
 
-#define ROM_IN_0 2
+//ROMボード接続GPIOの割り当て
+#define ROM_IN_0 2   //下位bit
 #define ROM_IN_1 3
 #define ROM_IN_2 4
-#define ROM_IN_3 5
-#define ROM_OUT_0 13
+#define ROM_IN_3 5   //上位bit
+
+#define ROM_OUT_0 13 //下位bit
 #define ROM_OUT_1 12
 #define ROM_OUT_2 11
 #define ROM_OUT_3 10
 #define ROM_OUT_4 9
 #define ROM_OUT_5 8
 #define ROM_OUT_6 7
-#define ROM_OUT_7 6
+#define ROM_OUT_7 6 //上位bit
 
 //命令セット
 #define ADD_A_Im 0b0000
@@ -33,32 +35,32 @@
 
 //ROMRAMレジスタ等
 uint8_t rom[16];
-uint8_t ram[16];
-uint8_t c_flag = 0;
-uint8_t reg_a  = 0b0000;
+uint8_t ram[16]; //HW上では4bitであることに注意
+uint8_t c_flag = 0; //将来的には他のフラグも拡張することを考えたい
+uint8_t reg_a  = 0b0000; //初期値設定
 uint8_t reg_b  = 0b0000;
-uint8_t reg_sp = 0b1111;
+uint8_t reg_sp = 0b1111; //スタックの向きに注意
 uint8_t reg_pc = 0b0000;
-//実行ステップ数（スコア）
+//実行ステップ数（スコア）フォーマット指定子に注意（%05u）
 uint32_t  score = 0;
-//命令フラグ
-int32_t  opcode;
 //実行速度設定用
 uint8_t speed;
 
 LiquidCrystal_I2C lcd(0x27, 20, 04);
 
-void rom_select(int32_t a) {
-  //アドレスaを入力する。
-  digitalWrite(ROM_IN_0, (a & 0b1000) >> 3);
-  digitalWrite(ROM_IN_1, (a & 0b0100) >> 2);
-  digitalWrite(ROM_IN_2, (a & 0b0010) >> 1);
-  digitalWrite(ROM_IN_3, (a & 0b0001) >> 0);
+//引数として渡されたROMのアドレス4bitをROMボードに入力する。
+void rom_select(int32_t address) {
+  //アドレスを入力する。
+  digitalWrite(ROM_IN_0, (address & 0b1000) >> 3);
+  digitalWrite(ROM_IN_1, (address & 0b0100) >> 2);
+  digitalWrite(ROM_IN_2, (address & 0b0010) >> 1);
+  digitalWrite(ROM_IN_3, (address & 0b0001) >> 0);
 }
-//ROMの読み出し。グローバル変数に格納
+//ROMの読み出し。ROMボードからの出力は、グローバル変数としてrom[]に格納
 void rom_read() {
   for (int32_t i = 0b0000; i <= 0b1111; i++) {
     rom_select(i);
+    delay(10);//rom読み込み時の信頼性向上のため（効果は不明）
     rom[i] = 0;
     rom[i] += digitalRead(ROM_OUT_0) << 0;
     rom[i] += digitalRead(ROM_OUT_1) << 1;
@@ -70,22 +72,22 @@ void rom_read() {
     rom[i] += digitalRead(ROM_OUT_7) << 7;
   }
 }
-
+//ramの初期化
 void ram_init() {
-  for (int32_t i = 0; i < 16; i++) {
+  for (int32_t i = 0; i <= 0b1111; i++) {
     ram[i] = 0b0000;
   }
 }
 
 void add_a_im() {
-  int32_t tmp = rom[reg_pc] & 0b00001111;
+  int8_t tmp = rom[reg_pc] & 0b00001111;
   reg_a += tmp;
   if (reg_a > 0b1111) {
     c_flag = 1;
+    reg_a = reg_a % 16;
   } else {
     c_flag = 0;
   }
-  reg_a = reg_a % 16;
   reg_pc = (++reg_pc) % 16;
 }
 void mov_a_b() {
@@ -102,7 +104,6 @@ void mov_a_b() {
 void in_a_im() {
   reg_a = ram[rom[reg_pc] & 0b00001111];
   c_flag = 0;
-  reg_a = reg_a % 16;
   reg_pc = (++reg_pc) % 16;
 }
 void mov_a_im() {
@@ -126,16 +127,15 @@ void add_b_im() {
   reg_b += tmp;
   if (reg_b > 0b1111) {
     c_flag = 1;
+    reg_b = reg_b % 16;
   } else {
     c_flag = 0;
   }
-  reg_b = reg_b % 16;
   reg_pc = (++reg_pc) % 16;
 }
 void in_b_im() {
   reg_b = ram[rom[reg_pc] & 0b00001111];
   c_flag = 0;
-  reg_b = reg_b % 16;
   reg_pc = (++reg_pc) % 16;
 }
 void mov_b_im() {
@@ -206,69 +206,68 @@ void jmp_im() {
   c_flag = 0;
 }
 
-void lcd_display() {
+void lcd_display(int8_t opcode) {
   char RAM0_5[19];
   char RAM6_B[19];
   char RAMC_Fabsc[21];
-  char absc[9];
   char pOPscr[20];
   char f_ram_cng = 0;
 
   lcd.setCursor(1, 3);
   switch (opcode) {
-    case 0:
+    case ADD_A_Im:
       snprintf(pOPscr, 20, "%X:ADD  A ,  %X %05lu", reg_pc, rom[reg_pc] & 0b00001111, score);
       break;
-    case 1:
+    case MOV_A_B:
       snprintf(pOPscr, 20, "%X:MOV  A ,  B %05lu", reg_pc, score);
       break;
-    case 2:
+    case IN_A_Im:
       snprintf(pOPscr, 20, "%X:IN   A ,[0%X]%05lu", reg_pc, rom[reg_pc] & 0b00001111, score);
       f_ram_cng = 1;
       break;
-    case 3:
+    case MOV_A_Im:
       snprintf(pOPscr, 20, "%X:MOV  A ,  %X %05lu", reg_pc, rom[reg_pc] & 0b00001111, score);
       break;
-    case 4:
+    case MOV_B_A:
       snprintf(pOPscr, 20, "%X:MOV  B ,  A %05lu", reg_pc, score);
       break;
-    case 5:
+    case ADD_B_Im:
       snprintf(pOPscr, 20, "%X:ADD  B ,  %X %05lu", reg_pc, rom[reg_pc] & 0b00001111, score);
       break;
-    case 6:
+    case IN_B_Im:
       snprintf(pOPscr, 20, "%X:IN   B ,[0%X]%05lu", reg_pc, rom[reg_pc] & 0b00001111, score);
       f_ram_cng = 1;
       break;
-    case 7:
+    case MOV_B_Im:
       snprintf(pOPscr, 20, "%X:MOV  B ,  %X %05lu", reg_pc, rom[reg_pc] & 0b00001111, score);
       break;
-    case 8:
+    case PUSH_A:
       snprintf(pOPscr, 20, "%X:PUSH A      %05lu", reg_pc, score);
       f_ram_cng = 1;
       break;
-    case 9:
+    case OUT_A_Im:
       snprintf(pOPscr, 20, "%X:OUT  A ,[0%X]%05lu", reg_pc, rom[reg_pc] & 0b00001111, score);
       f_ram_cng = 1;
       break;
-    case 10:
+    case POP_A:
       snprintf(pOPscr, 20, "%X:POP  A      %05lu", reg_pc, score);
       f_ram_cng = 1;
       break;
-    case 11:
+    case OUT_Im_A:
       snprintf(pOPscr, 20, "%X:OUT  %X ,[ A]%05lu", reg_pc, rom[reg_pc] & 0b00001111, score);
       f_ram_cng = 1;
       break;
-    case 12:
+    case ADDS:
       snprintf(pOPscr, 20, "%X:ADDS        %05lu", reg_pc, score);
       f_ram_cng = 1;
       break;
-    case 13:
+    case JC_Im:
       snprintf(pOPscr, 20, "%X:JC   %X      %05lu", reg_pc, rom[reg_pc] & 0b00001111, score);
       break;
-    case 14:
+    case JNC_Im:
       snprintf(pOPscr, 20, "%X:JNC  %X      %05lu", reg_pc, rom[reg_pc] & 0b00001111, score);
       break;
-    case 15:
+    case JMP_Im:
       snprintf(pOPscr, 20, "%X:JMP  %X      %05lu", reg_pc, rom[reg_pc] & 0b00001111, score);
       break;
     default:
@@ -306,15 +305,13 @@ void serial_debug() {
 }
 
 void setup() {
-  //debug
-  //Serial.begin( 9600 );     // シリアル通信を初期化する。通信速度は9600bps
-
-  // ROM入力pin割り当て
+  //ROMボード接続GPIO
+  //ROM入力割り当て
   pinMode(ROM_IN_0, OUTPUT);
   pinMode(ROM_IN_1, OUTPUT);
   pinMode(ROM_IN_2, OUTPUT);
   pinMode(ROM_IN_3, OUTPUT);
-  // ROM出力pin割り当て
+  //ROM出力割り当て
   pinMode(ROM_OUT_0, INPUT);
   pinMode(ROM_OUT_1, INPUT);
   pinMode(ROM_OUT_2, INPUT);
@@ -323,7 +320,7 @@ void setup() {
   pinMode(ROM_OUT_5, INPUT);
   pinMode(ROM_OUT_6, INPUT);
   pinMode(ROM_OUT_7, INPUT);
-  // 実行速度設定用
+  //実行速度設定用 14番GPIOのhigh及びlowにより動作クロックの変更を行う
   pinMode(14, INPUT);
   speed = digitalRead(14);
 
@@ -334,6 +331,8 @@ void setup() {
   lcd.print("Ready...");
   delay(1000);
   //高速化のために固定表示部を予めLCDに表示
+  char RAM0_5[19];
+  char RAM6_B[19];
   lcd.setCursor(0, 0);
   lcd.print("0:");
   lcd.setCursor(0, 1);
@@ -342,8 +341,6 @@ void setup() {
   lcd.print("C:");
   lcd.setCursor(0, 3);
   lcd.print("p");
-  char RAM0_5[19];
-  char RAM6_B[19];
   snprintf(RAM0_5, 17, "%X1:%X2:%X3:%X4:%X5:%X", ram[0x0], ram[0x1], ram[0x2], ram[0x3], ram[0x4], ram[0x5]);
   snprintf(RAM6_B, 17, "%X7:%X8:%X9:%XA:%XB:%X", ram[0x6], ram[0x7], ram[0x8], ram[0x9], ram[0xA], ram[0xB]);
   lcd.setCursor(2, 0);
@@ -355,90 +352,61 @@ void setup() {
   //RAM初期化
   ram_init();
   //シリアルモニタデバッグ用表示
+  //Serial.begin( 9600 );
   //serial_debug();
 }
 
 void loop() {
-  rom_select(reg_pc);
-  switch (rom[reg_pc] >> 4) {
+  rom_select(reg_pc); //ROMボードを点灯させるための処理（内部的には不要）
+  int8_t opcode = rom[reg_pc] >> 4;
+  lcd_display(opcode);
+  switch (opcode) {
     case ADD_A_Im:
-      opcode = 0;
-      lcd_display();
       add_a_im();
       break;
     case MOV_A_B:
-      opcode = 1;
-      lcd_display();
       mov_a_b();
       break;
     case IN_A_Im:
-      opcode = 2;
-      lcd_display();
       in_a_im();
       break;
     case MOV_A_Im:
-      opcode = 3;
-      lcd_display();
       mov_a_im();
       break;
     case MOV_B_A:
-      opcode = 4;
-      lcd_display();
       mov_b_a();
       break;
     case ADD_B_Im:
-      opcode = 5;
-      lcd_display();
       add_b_im();
       break;
     case IN_B_Im:
-      opcode = 6;
-      lcd_display();
       in_b_im();
       break;
     case MOV_B_Im:
-      opcode = 7;
-      lcd_display();
       mov_b_im();
       break;
     case PUSH_A:
-      opcode = 8;
-      lcd_display();
       push_a();
       break;
     case OUT_A_Im:
-      opcode = 9;
-      lcd_display();
       out_a_im();
       break;
     case POP_A:
-      opcode = 10;
-      lcd_display();
       pop_a();
       break;
     case OUT_Im_A:
-      opcode = 11;
-      lcd_display();
       out_im_a();
       break;
     case ADDS:
-      opcode = 12;
-      lcd_display();
       adds();
       break;
     case JC_Im:
-      opcode = 13;
-      lcd_display();
       jc_im();
       break;
     case JNC_Im:
-      opcode = 14;
-      lcd_display();
       jnc_im();
       break;
     case JMP_Im:
-      opcode = 15;
-      lcd_display();
       jmp_im();
       break;
     default:
@@ -449,11 +417,10 @@ void loop() {
     delay(1000);
   }
   if (ram[0] > 0b0111) {
-    lcd_display();
+    lcd_display(opcode);
     lcd.setCursor(19, 0);
     lcd.print("*");
     for (;;) {
       delay(10000);
     }
-  }
-}
+ }
