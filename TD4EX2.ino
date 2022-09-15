@@ -1,21 +1,6 @@
 #include <LiquidCrystal.h>
 #include <EEPROM.h>
 
-//ROMボード接続GPIOの割り当て
-#define ROM_IN_0 2   //下位bit
-#define ROM_IN_1 3
-#define ROM_IN_2 4
-#define ROM_IN_3 5   //上位bit
-
-#define ROM_OUT_0 13 //下位bit
-#define ROM_OUT_1 12
-#define ROM_OUT_2 11
-#define ROM_OUT_3 10
-#define ROM_OUT_4 9
-#define ROM_OUT_5 8
-#define ROM_OUT_6 7
-#define ROM_OUT_7 6 //上位bit
-
 //命令セット
 #define ADD_A_Im 0b0000
 #define MOV_A_B  0b0001
