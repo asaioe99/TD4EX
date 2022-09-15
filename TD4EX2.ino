@@ -49,13 +49,14 @@
 #define run_pgm     2
 #define load_pvos   3
 #define end_emu     4
+#define mode_select 5
 
 // 表示内容制御
 uint8_t mode = 0; //0:1Hz 1:manual 2:max
-uint8_t show = 0;
+uint8_t show = 0; 
 
 // 初期設定
-uint8_t display = load_or_new;
+uint8_t display = mode_select;
 
 //ROMRAMレジスタ等
 uint8_t rom[16];
@@ -65,7 +66,7 @@ uint8_t reg_a  = 0b0000; //初期値設定
 uint8_t reg_b  = 0b0000;
 uint8_t reg_sp = 0b1111; //スタックの向きに注意
 uint8_t reg_pc = 0b0000;
-//実行ステップ数（スコア）フォーマット指定子に注意（%05u）
+//実行ステップ数（スコア）フォーマット指定子に注意（%lu）
 uint32_t  score = 0;
 
 // 液晶
@@ -334,7 +335,7 @@ void display_0() {
       default:
         break;
     }
-    delay(100);
+    delay(200);
     lcd.clear();
     if (arrow == 0) {
       lcd.print("load previous <-");
@@ -347,7 +348,36 @@ void display_0() {
     }
   }
 }
-
+// display:0 mode:0
+// ----------------
+// 0123456789ABCDEF
+// fast mode <-    
+// slow mode <-
+void display_5() {
+  while (display == mode_select) {
+    switch (read_LCD_buttons(analogRead(0))) {
+      case btnUP:
+      case btnDOWN:
+        mode = (++mode) % 2;
+        break;
+      case btnSELECT:
+        display = load_or_new;
+      default:
+        break;
+    }
+    delay(200);
+    lcd.clear();
+    if (mode == 0) {
+      lcd.print("fast mode <-    ");
+      lcd.setCursor(0, 1);
+      lcd.print("slow mode       ");
+    } else {
+      lcd.print("fast mode       ");
+      lcd.setCursor(0, 1);
+      lcd.print("slow mode <-    ");
+    }
+  }
+}
 // display:1
 // ----------------
 // 0123456789ABCDEF
@@ -359,8 +389,8 @@ void display_0() {
 //
 // ----------------
 // 0123456789ABCDEF
-// RUN?
-// YES : NO
+// RUN the program
+// push select
 void display_1() {
   uint8_t address = 0x00;
   uint8_t bit = 0;
@@ -368,7 +398,11 @@ void display_1() {
   while (display == rom_input) {
     switch (read_LCD_buttons(analogRead(0))) {
       case btnUP:
-        address = (--address) % 18; //0～15は編集するROMのアドレスに対応、16はromの保存先選択画面、17は実行選択画面
+        if (address == 0) {
+          address = 17;
+        } else {
+          address = (--address) % 18; //0～15は編集するROMのアドレスに対応、16はromの保存先選択画面、17は実行選択画面
+        }
         break;
       case btnDOWN:
         address = (++address) % 18;
@@ -377,7 +411,7 @@ void display_1() {
         if (address == 16) {
           num = (--num) % 8;
         } else if (address < 16) {
-          bit = (--bit) % 8;
+          bit = (++bit) % 8;
         }
         break;
       case btnRIGHT:
@@ -398,7 +432,7 @@ void display_1() {
       default:
         break;
     }
-    delay(100);
+    delay(200);
     lcd.clear();
     if (address == 16) {
       lcd.print("SAVE:<# >");
@@ -419,7 +453,7 @@ void display_1() {
       display_opcode(5, 0, address);
       for (int i = 0; i < 8; i++) {
         lcd.setCursor(0xE - 2 * i, 1);
-        if (rom[address] ^ (1 << i) == 0) {
+        if ((rom[address] & (1 << i)) == 0) {
           lcd.print("0");
         } else {
           lcd.print("1");
@@ -435,87 +469,20 @@ void display_1() {
 // ----------------
 // 0123456789ABCDEF
 // m 00 ***********
-// A:  B:  S:  c:
-// ----------------
-// 0123456789ABCDEF
-// m 00 ***********
-// score:
-// ----------------
-// 0123456789ABCDEF
-// m 00 ***********
-// 0:  1:  2:  3:
-// ----------------
-// 0123456789ABCDEF
-// m 00 ***********
-// 4:  5:  6:  7:
-// ----------------
-// 0123456789ABCDEF
-// m 00 ***********
-// 8:  9:  A:  B:
-// ----------------
-// 0123456789ABCDEF
-// m 00 ***********
-// C:  D:  E:  F:
+// A*B*S*c*s:******
 void display_2() {
-  while (display == run_pgm) {
-    switch (read_LCD_buttons(analogRead(0))) {
-      case btnUP:
-        if (show != 0) {
-          show--;
-        }
-        break;
-      case btnDOWN:
-        if (show != 5) {
-          show++;
-        }
-        break;
-      case btnRIGHT:
-        mode = (++mode) % 3;
-        break;
-      case btnLEFT:
-        mode = (--mode) % 3;
-        break;
-      default:
-        break;
-    }
-    if (mode == 1) {
-      while (read_LCD_buttons(analogRead(0)) == btnSELECT) {
-        delay(100);
-      }
-    } else if (mode == 0) {
-      delay(1000);
-    }
-    lcd.setCursor(0, 0);
-    char str_mode_addr[6];
-    snprintf(str_mode_addr, 5, "%u %0X ", mode, rom[reg_pc]);
-    lcd.print(str_mode_addr);
-    display_opcode(5, 0, reg_pc);
-    char str[17];
-    switch (show) {
-      case 0:
-        snprintf(str, 16, "A:%X B:%X S:%X c:%X ", reg_a, reg_b, reg_sp, c_flag);
-        break;
-      case 1:
-        snprintf(str, 16, " score:%lu07  ", score);
-        break;
-      case 2:
-        snprintf(str, 16, "0:%X 1:%X 2:%X 3:%X ", ram[0x0], ram[0x1], ram[0x2], ram[0x3]);
-        break;
-      case 3:
-        snprintf(str, 16, "4:%X 5:%X 6:%X 7:%X ", ram[0x4], ram[0x5], ram[0x6], ram[0x7]);
-        break;
-      case 4:
-        snprintf(str, 16, "8:%X 9:%X A:%X B:%X ", ram[0x8], ram[0x9], ram[0xA], ram[0xB]);
-        break;
-      case 5:
-        snprintf(str, 16, "C:%X D:%X E:%X F:%X ", ram[0xC], ram[0xD], ram[0xE], ram[0xF]);
-        break;
-      default:
-        break;
-    }
-    lcd.setCursor(0, 1);
-    lcd.print(str);
+  if (mode == 1) {
+    delay(1000);
   }
+  lcd.clear();
+  char str_mode_addr[6];
+  snprintf(str_mode_addr, 5, "   %X ", reg_pc);
+  lcd.print(str_mode_addr);
+  display_opcode(5, 0, reg_pc);
+  char str[17];
+  snprintf(str, 17, "A%XB%XS%Xc%Xs:%06lu", reg_a, reg_b, reg_sp, c_flag, score);
+  lcd.setCursor(0, 1);
+  lcd.print(str);
 }
 
 // display:3 arrow_x:2 arrow_y:1
@@ -533,15 +500,18 @@ void display_3() {
         break;
       case btnRIGHT:
         arrow = (++arrow) % 8;
+        break;
       case btnLEFT:
         arrow = (--arrow) % 8;
+        break;
       case btnSELECT:
         display = rom_input;
         rom_load(arrow);
+        break;
       default:
         break;
     }
-    delay(100);
+    delay(200);
     lcd.clear();
     switch (arrow) {
       case 0:
@@ -609,7 +579,7 @@ void display_4() {
 
     lcd.setCursor(0, 0);
     char str_mode_addr[6];
-    snprintf(str_mode_addr, 5, "* %0X ", mode, rom[reg_pc]);
+    snprintf(str_mode_addr, 6, "* %0X ", mode, rom[reg_pc]);
     lcd.print(str_mode_addr);
     display_opcode(5, 0, reg_pc);
     char str[17];
@@ -651,16 +621,20 @@ void setup() {
   lcd.print("TD4EX2 Ver1.00");
   delay(1000);
 
-  while (true) {
+  while (display != run_pgm) {
     switch (display) {
       case load_or_new:
         display_0();
         break;
       case rom_input:
         display_1();
+        lcd.noCursor();
         break;
       case load_pvos:
         display_3();
+        break;
+      case mode_select:
+        display_5();
         break;
       default:
         break;
