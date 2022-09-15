@@ -526,9 +526,6 @@ void display_1() {
 // m 00 ***********
 // A*B*S*c*s:******
 void display_2() {
-  if (mode == 1) {
-    delay(1000);
-  }
   lcd.setCursor(3, 0);
   char str_mode_addr[2];
   snprintf(str_mode_addr, 2, "%X ", reg_pc);
@@ -538,6 +535,9 @@ void display_2() {
   snprintf(str, 16, "%XB%XS%Xc%Xs:%06lu", reg_a, reg_b, reg_sp, c_flag, score);
   lcd.setCursor(1, 1);
   lcd.print(str);
+  if (mode == 1) {
+    delay(1000);
+  }
 }
 
 // display:3 arrow_x:2 arrow_y:1
