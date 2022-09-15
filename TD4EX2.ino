@@ -1,4 +1,5 @@
 #include <LiquidCrystal.h>
+#include <EEPROM.h>
 
 //ROMボード接続GPIOの割り当て
 #define ROM_IN_0 2   //下位bit
@@ -70,6 +71,7 @@ uint32_t  score = 0;
 // 液晶
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 
+// ボタン判定
 int read_LCD_buttons(int adc_key_in) {
   if (adc_key_in > 1000) return btnNONE;   //1023, 戻り値5, 5.00V
   if (adc_key_in < 50)   return btnRIGHT;  //0   , 戻り値0, 0V
@@ -78,8 +80,32 @@ int read_LCD_buttons(int adc_key_in) {
   if (adc_key_in < 650)  return btnLEFT;   //504 , 戻り値3, 2.47V
   if (adc_key_in < 850)  return btnSELECT; //741 , 戻り値4, 3.62V
  
- /* 全てのifが失敗（通常はこれを返さない）*/
+ // 全てのifが失敗（通常はこれを返さない）
  return ERRORR;                          
+}
+
+// EEPROM内のデータ構造
+//n+00 ROM[0]
+//n+0f ROM[F]
+//n+10 score & b1111 0000 0000 0000
+//n+11 score & b0000 1111 0000 0000
+//n+12 score & b0000 0000 1111 0000
+//n+13 score & b0000 0000 0000 1111
+//n+14 RSV
+//n+1F RSV
+
+// ROMをEEPROMから読み出し
+void rom_load(uint8_t nom) {
+  for (uint8_t i = 0x00; i < 0x10; i++) {
+    rom[i] = EEPROM.read(num * 0x20 + i);
+  }
+}
+
+// ROMをEEPROMに書き込み
+void rom_save(uint8_t nom) {
+  for (uint8_t i = 0x00; i < 0x10; i++) {
+    EEPROM.write(num * 0x20 + i, rom[i]);
+  }
 }
 
 //ROMの読み出し。ROMボードからの出力は、グローバル変数としてrom[]に格納
@@ -316,7 +342,7 @@ void display_0() {
         break;
       case btnSELECT:
         if (arrow == 0) {
-            display = 100;
+            display = load_pvos;
         } else {
             display = rom_input;
         }
@@ -344,30 +370,44 @@ void display_0() {
 // 0 0 0 0 0 0 0 0 
 // ----------------
 // 0123456789ABCDEF
+// SAVE:<#0>
+// 
+// ----------------
+// 0123456789ABCDEF
 // RUN?
 // YES : NO 
 void display_1() {
   uint8_t address = 0x00;
   uint8_t bit = 0;
+  uint8_t nom = 0;
   while (display == rom_input) {
     switch(read_LCD_buttons(analogRead(0))) {
       case btnUP:
-        address = (--address) % 17; //0～15は編集するROMのアドレスに対応、16は実行選択画面
+        address = (--address) % 18; //0～15は編集するROMのアドレスに対応、16はromの保存先選択画面、17は実行選択画面
         break;
       case btnDOWN:
-        address = (++address) % 17;
+        address = (++address) % 18;
         break;
       case btnLEFT:
-        bit = (--bit) % 8;
+        if (address == 16) {
+          num = (--num) % 8;
+        } else if (address < 16) {
+          bit = (--bit) % 8;
+        }
         break;
       case btnRIGHT:
-        bit = (++bit) % 8;    
+        if (address == 16) {
+          num = (++num) % 8;
+        } else if (address < 16) {
+          bit = (--bit) % 8;
+        }
         break;
-      case btnSELECT:
-        if (address != 16) {
-          rom[address] ^= (1 << bit)
-        } else {
+      case btnSELECT:  
+        if (address == 17){
           display = run;
+          rom_save(num);
+        } else if (address < 16) {
+          rom[address] ^= (1 << bit)
         }
         break;
       default:
@@ -376,6 +416,12 @@ void display_1() {
     delay(100);
     lcd.clear();
     if (address == 16) {
+      lcd.print("SAVE:<# >");
+      lcd.setCursor(7,0);
+      lcd.print(num, DEC);
+      lcd.setCursor(8,0);
+      lcd.print(">");
+    } else if (address == 17) {
       lcd.print("RUN the program");
       lcd.setCursor(0,1);
       lcd.print("push select");
@@ -487,6 +533,78 @@ void display_2() {
   }
 }
 
+// display:3 arrow_x:2 arrow_y:1
+// ----------------
+// 0123456789ABCDEF
+// #0  #1  #2  #3
+// #4  #5  #6<-#7  
+void display_3() {
+  uint8_t arrow = 0;
+  while (display == load_pvos) {
+    switch(read_LCD_buttons(analogRead(0))) {
+      case btnUP:
+      case btnDOWN:
+        arrow = (arrow + 4) % 8;
+        break;
+      case btnRIGHT:
+        arrow = (++arrow) % 8;
+      case btnLEFT:
+        arrow = (--arrow) % 8;
+      case btnSELECT:
+        display = rom_input;
+        rom_load(arrow);
+      default:
+        break;
+    }
+    delay(100);
+    lcd.clear();
+    switch (arrow) {
+      case 0:
+        lcd.print("#0<-#1  #2  #3  ");
+        lcd.setCursor(0,1);
+        lcd.print("#4  #5  #6  #7  ");
+        break;
+      case 1:
+        lcd.print("#0  #1<-#2  #3  ");
+        lcd.setCursor(0,1);
+        lcd.print("#4  #5  #6  #7  ");
+        break;
+      case 2:
+        lcd.print("#0  #1  #2<-#3  ");
+        lcd.setCursor(0,1);
+        lcd.print("#4  #5  #6  #7  ");
+        break;
+      case 3:
+        lcd.print("#0  #1  #2  #3<-");
+        lcd.setCursor(0,1);
+        lcd.print("#4  #5  #6  #7  ");
+        break;
+      case 4:
+        lcd.print("#0  #1  #2  #3  ");
+        lcd.setCursor(0,1);
+        lcd.print("#4<-#5  #6  #7  ");
+        break;
+      case 5:
+        lcd.print("#0  #1  #2  #3  ");
+        lcd.setCursor(0,1);
+        lcd.print("#4  #5<-#6  #7  ");
+        break;
+      case 6:
+        lcd.print("#0  #1  #2  #3  ");
+        lcd.setCursor(0,1);
+        lcd.print("#4  #5  #6<-#7  ");
+        break;
+      case 7:
+        lcd.print("#0  #1  #2  #3  ");
+        lcd.setCursor(0,1);
+        lcd.print("#4  #5  #6  #7<-");
+        break;
+      default:
+        break;
+    }
+  }
+}
+
 void display_4() {
   while (display == end) {
     switch(read_LCD_buttons(analogRead(0))) {
@@ -557,7 +675,7 @@ void setup() {
         display_1();
         break;
     case load_pvos:
-        //display_2();
+        display_3();
         break;
     default:
         break;
