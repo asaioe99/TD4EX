@@ -36,9 +36,15 @@
 #define end_emu     4
 #define mode_select 5
 
+// dekay()時間
+#define ttn 150
+
 // 表示内容制御
 uint8_t mode = 0; //0:1Hz 1:manual 2:max
-uint8_t show = 0; 
+uint8_t show = 1;
+
+// 命令コード表示用
+char str_op[16][12];
 
 // 初期設定
 uint8_t display = mode_select;
@@ -234,63 +240,126 @@ void jmp_im() {
   c_flag = 0;
 }
 
+void init_display_opcode() {
+
+  for (int i = 0; i < 16; i++) {
+    switch (rom[i] >> 4) {
+      case ADD_A_Im:
+        snprintf(&str_op[i][0], 12, "ADD  A , %X ", rom[i] & 0b00001111);
+        break;
+      case MOV_A_B:
+        snprintf(&str_op[i][0], 12, "MOV  A , B ");
+        break;
+      case IN_A_Im:
+        snprintf(&str_op[i][0], 12, "IN   A ,[%X]", rom[i] & 0b00001111);
+        break;
+      case MOV_A_Im:
+        snprintf(&str_op[i][0], 12, "MOV  A , %X ", rom[i] & 0b00001111);
+        break;
+      case MOV_B_A:
+        snprintf(&str_op[i][0], 12, "MOV  B , A ");
+        break;
+      case ADD_B_Im:
+        snprintf(&str_op[i][0], 12, "ADD  B , %X ", rom[i] & 0b00001111);
+        break;
+      case IN_B_Im:
+        snprintf(&str_op[i][0], 12, "IN   B ,[%X]", rom[i] & 0b00001111);
+        break;
+      case MOV_B_Im:
+        snprintf(&str_op[i][0], 12, "MOV  B , %X ", rom[i] & 0b00001111);
+        break;
+      case PUSH_A:
+        snprintf(&str_op[i][0], 12, "PUSH A     ");
+        break;
+      case OUT_A_Im:
+        snprintf(&str_op[i][0], 12, "OUT  A ,[%X]", rom[i] & 0b00001111);
+        break;
+      case POP_A:
+        snprintf(&str_op[i][0], 12, "POP  A     ");
+        break;
+      case OUT_Im_A:
+        snprintf(&str_op[i][0], 12, "OUT  %X ,[A]", rom[i] & 0b00001111);
+        break;
+      case ADDS:
+        snprintf(&str_op[i][0], 12, "ADDS       ");
+        break;
+      case JC_Im:
+        snprintf(&str_op[i][0], 12, "JC   %X     ", rom[i] & 0b00001111);
+        break;
+      case JNC_Im:
+        snprintf(&str_op[i][0], 12, "JNC  %X     ", rom[i] & 0b00001111);
+        break;
+      case JMP_Im:
+        snprintf(&str_op[i][0], 12, "JMP  %X     ", rom[i] & 0b00001111);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
+void display_opcode_fast(uint8_t x, uint8_t y, uint8_t addr) {
+  lcd.setCursor(x, y);
+  lcd.print(&str_op[addr][0]);
+}
+
 void display_opcode(uint8_t x, uint8_t y, uint8_t addr) {
-  char str_op[12];
+  char str_op_tmp[12];
 
   lcd.setCursor(x, y);
   switch (rom[addr] >> 4) {
     case ADD_A_Im:
-      snprintf(str_op, 12, "ADD  A , %X ", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "ADD  A , %X ", rom[addr] & 0b00001111);
       break;
     case MOV_A_B:
-      snprintf(str_op, 12, "MOV  A , B ");
+      snprintf(str_op_tmp, 12, "MOV  A , B ");
       break;
     case IN_A_Im:
-      snprintf(str_op, 12, "IN   A ,[%X]", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "IN   A ,[%X]", rom[addr] & 0b00001111);
       break;
     case MOV_A_Im:
-      snprintf(str_op, 12, "MOV  A , %X ", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "MOV  A , %X ", rom[addr] & 0b00001111);
       break;
     case MOV_B_A:
-      snprintf(str_op, 12, "MOV  B , A ");
+      snprintf(str_op_tmp, 12, "MOV  B , A ");
       break;
     case ADD_B_Im:
-      snprintf(str_op, 12, "ADD  B , %X ", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "ADD  B , %X ", rom[addr] & 0b00001111);
       break;
     case IN_B_Im:
-      snprintf(str_op, 12, "IN   B ,[%X]", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "IN   B ,[%X]", rom[addr] & 0b00001111);
       break;
     case MOV_B_Im:
-      snprintf(str_op, 12, "MOV  B , %X ", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "MOV  B , %X ", rom[addr] & 0b00001111);
       break;
     case PUSH_A:
-      snprintf(str_op, 12, "PUSH A     ");
+      snprintf(str_op_tmp, 12, "PUSH A     ");
       break;
     case OUT_A_Im:
-      snprintf(str_op, 12, "OUT  A ,[%X]", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "OUT  A ,[%X]", rom[addr] & 0b00001111);
       break;
     case POP_A:
-      snprintf(str_op, 12, "POP  A     ");
+      snprintf(str_op_tmp, 12, "POP  A     ");
       break;
     case OUT_Im_A:
-      snprintf(str_op, 12, "OUT  %X ,[A]", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "OUT  %X ,[A]", rom[addr] & 0b00001111);
       break;
     case ADDS:
-      snprintf(str_op, 12, "ADDS       ");
+      snprintf(str_op_tmp, 12, "ADDS       ");
       break;
     case JC_Im:
-      snprintf(str_op, 12, "JC   %X     ", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "JC   %X     ", rom[addr] & 0b00001111);
       break;
     case JNC_Im:
-      snprintf(str_op, 12, "JNC  %X     ", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "JNC  %X     ", rom[addr] & 0b00001111);
       break;
     case JMP_Im:
-      snprintf(str_op, 12, "JMP  %X     ", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "JMP  %X     ", rom[addr] & 0b00001111);
       break;
     default:
       break;
   }
-  lcd.print(str_op);
+  lcd.print(str_op_tmp);
 }
 
 // display:0 arrow:0
@@ -320,7 +389,7 @@ void display_0() {
       default:
         break;
     }
-    delay(200);
+    delay(ttn);
     lcd.clear();
     if (arrow == 0) {
       lcd.print("load previous <-");
@@ -336,7 +405,7 @@ void display_0() {
 // display:0 mode:0
 // ----------------
 // 0123456789ABCDEF
-// fast mode <-    
+// fast mode <-
 // slow mode <-
 void display_5() {
   while (display == mode_select) {
@@ -350,7 +419,7 @@ void display_5() {
       default:
         break;
     }
-    delay(200);
+    delay(ttn);
     lcd.clear();
     if (mode == 0) {
       lcd.print("fast mode <-    ");
@@ -380,6 +449,7 @@ void display_1() {
   uint8_t address = 0x00;
   uint8_t bit = 0;
   uint8_t num = 0;
+  lcd.cursor();
   while (display == rom_input) {
     switch (read_LCD_buttons(analogRead(0))) {
       case btnUP:
@@ -410,6 +480,7 @@ void display_1() {
         if (address == 17) {
           display = run_pgm;
           rom_save(num);
+          lcd.noCursor();
         } else if (address < 16) {
           rom[address] ^= (1 << bit);
         }
@@ -417,7 +488,7 @@ void display_1() {
       default:
         break;
     }
-    delay(200);
+    delay(ttn);
     lcd.clear();
     if (address == 16) {
       lcd.print("SAVE:<# >");
@@ -445,7 +516,6 @@ void display_1() {
         }
       }
       lcd.setCursor(0xE - 2 * bit, 1);
-      lcd.cursor();
     }
   }
 }
@@ -459,14 +529,14 @@ void display_2() {
   if (mode == 1) {
     delay(1000);
   }
-  lcd.clear();
-  char str_mode_addr[6];
-  snprintf(str_mode_addr, 5, "   %X ", reg_pc);
+  lcd.setCursor(3, 0);
+  char str_mode_addr[2];
+  snprintf(str_mode_addr, 2, "%X ", reg_pc);
   lcd.print(str_mode_addr);
-  display_opcode(5, 0, reg_pc);
-  char str[17];
-  snprintf(str, 17, "A%XB%XS%Xc%Xs:%06lu", reg_a, reg_b, reg_sp, c_flag, score);
-  lcd.setCursor(0, 1);
+  display_opcode_fast(5, 0, reg_pc);
+  char str[16];
+  snprintf(str, 16, "%XB%XS%Xc%Xs:%06lu", reg_a, reg_b, reg_sp, c_flag, score);
+  lcd.setCursor(1, 1);
   lcd.print(str);
 }
 
@@ -496,7 +566,7 @@ void display_3() {
       default:
         break;
     }
-    delay(200);
+    delay(ttn);
     lcd.clear();
     switch (arrow) {
       case 0:
@@ -561,7 +631,7 @@ void display_4() {
       default:
         break;
     }
-    delay(200);
+    delay(ttn);
     lcd.clear();
     char str_mode_addr[6];
     snprintf(str_mode_addr, 6, "* %0X ", mode, rom[reg_pc]);
@@ -603,7 +673,7 @@ void setup() {
   //LCD初期化
   lcd.begin(16, 2);
   lcd.setCursor(0, 0);
-  lcd.print("TD4EX2 Ver1.00");
+  lcd.print("TD4EX2 Ver1.03");
   delay(1000);
 
   while (display != run_pgm) {
@@ -613,7 +683,6 @@ void setup() {
         break;
       case rom_input:
         display_1();
-        lcd.noCursor();
         break;
       case load_pvos:
         display_3();
@@ -625,6 +694,10 @@ void setup() {
         break;
     }
   }
+  lcd.clear();
+  lcd.setCursor(0, 1);
+  lcd.print("A");
+  init_display_opcode();
 }
 
 void loop() {
