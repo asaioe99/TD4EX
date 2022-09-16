@@ -241,7 +241,6 @@ void jmp_im() {
 }
 
 void init_display_opcode() {
-
   for (int i = 0; i < 16; i++) {
     switch (rom[i] >> 4) {
       case ADD_A_Im:
@@ -272,13 +271,13 @@ void init_display_opcode() {
         snprintf(&str_op[i][0], 12, "PUSH A     ");
         break;
       case OUT_A_Im:
-        snprintf(&str_op[i][0], 12, "OUT  A ,[%X]", rom[i] & 0b00001111);
+        snprintf(&str_op[i][0], 12, "OUT [A], %X ", rom[i] & 0b00001111);
         break;
       case POP_A:
         snprintf(&str_op[i][0], 12, "POP  A     ");
         break;
       case OUT_Im_A:
-        snprintf(&str_op[i][0], 12, "OUT  %X ,[A]", rom[i] & 0b00001111);
+        snprintf(&str_op[i][0], 12, "OUT [%X], A ", rom[i] & 0b00001111);
         break;
       case ADDS:
         snprintf(&str_op[i][0], 12, "ADDS       ");
@@ -335,13 +334,13 @@ void display_opcode(uint8_t x, uint8_t y, uint8_t addr) {
       snprintf(str_op_tmp, 12, "PUSH A     ");
       break;
     case OUT_A_Im:
-      snprintf(str_op_tmp, 12, "OUT  A ,[%X]", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "OUT [A], %X ", rom[addr] & 0b00001111);
       break;
     case POP_A:
       snprintf(str_op_tmp, 12, "POP  A     ");
       break;
     case OUT_Im_A:
-      snprintf(str_op_tmp, 12, "OUT  %X ,[A]", rom[addr] & 0b00001111);
+      snprintf(str_op_tmp, 12, "OUT [%X], A ", rom[addr] & 0b00001111);
       break;
     case ADDS:
       snprintf(str_op_tmp, 12, "ADDS       ");
