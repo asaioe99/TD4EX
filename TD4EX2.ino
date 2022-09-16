@@ -40,7 +40,7 @@
 #define ttn 150
 
 // 表示内容制御
-uint8_t mode = 0; //0:1Hz 1:manual 2:max
+uint8_t mode = 0; //0:100Hz 1:1Hz 2:fast
 uint8_t show = 1;
 
 // 命令コード表示用
@@ -305,7 +305,6 @@ void display_opcode_fast(uint8_t x, uint8_t y, uint8_t addr) {
 
 void display_opcode(uint8_t x, uint8_t y, uint8_t addr) {
   char str_op_tmp[12];
-
   lcd.setCursor(x, y);
   switch (rom[addr] >> 4) {
     case ADD_A_Im:
@@ -390,7 +389,7 @@ void display_0() {
         break;
     }
     delay(ttn);
-    lcd.clear();
+    lcd.setCursor(0, 0);
     if (arrow == 0) {
       lcd.print("load previous <-");
       lcd.setCursor(0, 1);
@@ -411,8 +410,18 @@ void display_5() {
   while (display == mode_select) {
     switch (read_LCD_buttons(analogRead(0))) {
       case btnUP:
+        if (mode == 0) {
+          mode = 2;
+        } else {
+          mode--;
+        }
+        break;
       case btnDOWN:
-        mode = (++mode) % 2;
+        if (mode == 2) {
+          mode = 0;
+        } else {
+          mode++;
+        }
         break;
       case btnSELECT:
         display = load_or_new;
@@ -420,15 +429,19 @@ void display_5() {
         break;
     }
     delay(ttn);
-    lcd.clear();
+    lcd.setCursor(0, 0);
     if (mode == 0) {
-      lcd.print("fast mode <-    ");
+      lcd.print("100Hz <- fast   ");
       lcd.setCursor(0, 1);
-      lcd.print("slow mode       ");
+      lcd.print(" 1 Hz           ");
+    } else if (mode == 1) {
+      lcd.print("100Hz    fast   ");
+      lcd.setCursor(0, 1);
+      lcd.print(" 1 Hz <-        ");
     } else {
-      lcd.print("fast mode       ");
+      lcd.print("100Hz    fast <-");
       lcd.setCursor(0, 1);
-      lcd.print("slow mode <-    ");
+      lcd.print(" 1 Hz           ");
     }
   }
 }
@@ -449,6 +462,7 @@ void display_1() {
   uint8_t address = 0x00;
   uint8_t bit = 0;
   uint8_t num = 0;
+  uint8_t cng_flag = 1;
   lcd.cursor();
   while (display == rom_input) {
     switch (read_LCD_buttons(analogRead(0))) {
@@ -458,9 +472,11 @@ void display_1() {
         } else {
           address = (--address) % 18; //0～15は編集するROMのアドレスに対応、16はromの保存先選択画面、17は実行選択画面
         }
+        cng_flag = 1;
         break;
       case btnDOWN:
         address = (++address) % 18;
+        cng_flag = 1;
         break;
       case btnLEFT:
         if (address == 16) {
@@ -482,41 +498,45 @@ void display_1() {
           rom_save(num);
           lcd.noCursor();
         } else if (address < 16) {
+          cng_flag = 1;
           rom[address] ^= (1 << bit);
         }
         break;
       default:
         break;
     }
-    delay(ttn);
-    lcd.clear();
+    lcd.setCursor(0, 0);
     if (address == 16) {
-      lcd.print("SAVE:<# >");
+      lcd.print("SAVE:<# >       ");
+      lcd.setCursor(0, 1);
+      lcd.print("                ");
       lcd.setCursor(7, 0);
       lcd.print(num, DEC);
-      lcd.setCursor(8, 0);
-      lcd.print(">");
+      lcd.setCursor(7, 0);
     } else if (address == 17) {
-      lcd.print("RUN the program");
+      lcd.print("RUN the program ");
       lcd.setCursor(0, 1);
-      lcd.print("push select");
+      lcd.print("push select     ");
     } else {
-      lcd.print("0x0");
-      lcd.setCursor(3, 0);
-      lcd.print(address, HEX);
-      lcd.setCursor(5, 0);
-      lcd.print(" ");
-      display_opcode(5, 0, address);
-      for (int i = 0; i < 8; i++) {
-        lcd.setCursor(0xE - 2 * i, 1);
-        if ((rom[address] & (1 << i)) == 0) {
-          lcd.print("0");
-        } else {
-          lcd.print("1");
+      if (cng_flag) {
+        lcd.print("0x0             ");
+        lcd.setCursor(3, 0);
+        lcd.print(address, HEX);
+        lcd.setCursor(5, 0);
+        display_opcode(5, 0, address);
+        for (int i = 0; i < 8; i++) {
+          lcd.setCursor(0xE - 2 * i, 1);
+          if ((rom[address] & (1 << i)) == 0) {
+            lcd.print("0 ");
+          } else {
+            lcd.print("1 ");
+          }
         }
+        cng_flag = 0;
       }
       lcd.setCursor(0xE - 2 * bit, 1);
     }
+    delay(ttn);
   }
 }
 
@@ -566,8 +586,7 @@ void display_3() {
       default:
         break;
     }
-    delay(ttn);
-    lcd.clear();
+    lcd.setCursor(0, 0);
     switch (arrow) {
       case 0:
         lcd.print("#0<-#1  #2  #3  ");
@@ -612,10 +631,17 @@ void display_3() {
       default:
         break;
     }
+    delay(ttn);
   }
 }
 
-void display_4() {
+void display_4(uint32_t pc) {
+  char str[17];
+  char str_mode_addr[6];
+  lcd.clear();
+  snprintf(str_mode_addr, 6, "* %X ", pc);
+  lcd.print(str_mode_addr);
+  display_opcode(5, 0, pc);
   while (display == end_emu) {
     switch (read_LCD_buttons(analogRead(0))) {
       case btnUP:
@@ -631,13 +657,8 @@ void display_4() {
       default:
         break;
     }
-    delay(ttn);
-    lcd.clear();
-    char str_mode_addr[6];
-    snprintf(str_mode_addr, 6, "* %0X ", mode, rom[reg_pc]);
-    lcd.print(str_mode_addr);
-    display_opcode(5, 0, reg_pc);
-    char str[17];
+
+    lcd.setCursor(0, 1);
     switch (show) {
       case 0:
         snprintf(str, 16, "A:%X B:%X S:%X c:%X ", reg_a, reg_b, reg_sp, c_flag);
@@ -660,8 +681,8 @@ void display_4() {
       default:
         break;
     }
-    lcd.setCursor(0, 1);
     lcd.print(str);
+    delay(ttn);
   }
 }
 
@@ -673,7 +694,7 @@ void setup() {
   //LCD初期化
   lcd.begin(16, 2);
   lcd.setCursor(0, 0);
-  lcd.print("TD4EX2 Ver1.03");
+  lcd.print("TD4EX2 Ver1.06");
   delay(1000);
 
   while (display != run_pgm) {
@@ -695,14 +716,23 @@ void setup() {
     }
   }
   lcd.clear();
-  lcd.setCursor(0, 1);
-  lcd.print("A");
+  if (mode == 2) {
+    lcd.setCursor(0, 0);
+    lcd.print("Running...");
+  } else {
+    lcd.setCursor(0, 1);
+    lcd.print("A");
+  }
   init_display_opcode();
 }
 
 void loop() {
+  uint32_t p_pc;
   int8_t opcode = rom[reg_pc] >> 4;
-  display_2();
+  if (mode != 2) {
+    display_2();
+  }
+  p_pc = reg_pc;
   switch (opcode) {
     case ADD_A_Im:
       add_a_im();
@@ -755,11 +785,11 @@ void loop() {
     default:
       break;
   }
-  // socore測定
-  score++;
   // 終了時の判定
   if (ram[0] > 0b0111) {
     display = end_emu;
-    display_4();
+    display_4(p_pc);
   }
+  // score測定
+  score++;
 }
