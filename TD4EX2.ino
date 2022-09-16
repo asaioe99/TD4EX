@@ -784,11 +784,11 @@ void loop() {
     default:
       break;
   }
+  // score測定
+  score++;
   // 終了時の判定
   if (ram[0] > 0b0111) {
     display = end_emu;
     display_4(p_pc);
   }
-  // score測定
-  score++;
 }
