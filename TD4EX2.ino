@@ -1,23 +1,22 @@
 #include <LiquidCrystal.h>
 #include <EEPROM.h>
 
-//命令セット
-#define ADD_A_Im 0b0000
-#define MOV_A_B  0b0001
-#define IN_A_Im  0b0010
-#define MOV_A_Im 0b0011
-#define MOV_B_A  0b0100
-#define ADD_B_Im 0b0101
-#define IN_B_Im  0b0110
-#define MOV_B_Im 0b0111
-#define PUSH_A   0b1000
-#define OUT_A_Im 0b1001
-#define POP_A    0b1010
-#define OUT_Im_A 0b1011
-#define ADDS     0b1100
-#define JC_Im    0b1101
-#define JNC_Im   0b1110
-#define JMP_Im   0b1111
+#define ADD_A_Im  0b0000
+#define MOV_A_B   0b0001
+#define READ_A_Im 0b0010
+#define MOV_A_Im  0b0011
+#define MOV_B_A   0b0100
+#define ADD_B_Im  0b0101
+#define READ_B_Im 0b0110
+#define MOV_B_Im  0b0111
+#define PUSH_A    0b1000
+#define WRT_A_Im  0b1001
+#define POP_A     0b1010
+#define WRT_Im_A  0b1011
+#define ADDS      0b1100
+#define JC_Im     0b1101
+#define JNC_Im    0b1110
+#define JMP_Im    0b1111
 
 // ボタン割り当て
 #define btnRIGHT  0
@@ -48,6 +47,7 @@ char str_op[16][12];
 
 // 初期設定
 uint8_t display = mode_select;
+uint8_t num_save;
 
 //ROMRAMレジスタ等
 uint8_t rom[16];
@@ -135,7 +135,7 @@ void mov_a_b() {
   }
   reg_pc = (++reg_pc) % 16;
 }
-void in_a_im() {
+void read_a_im() {
   reg_a = ram[rom[reg_pc] & 0b00001111];
   c_flag = 0;
   reg_pc = (++reg_pc) % 16;
@@ -167,7 +167,7 @@ void add_b_im() {
   }
   reg_pc = (++reg_pc) % 16;
 }
-void in_b_im() {
+void read_b_im() {
   reg_b = ram[rom[reg_pc] & 0b00001111];
   c_flag = 0;
   reg_pc = (++reg_pc) % 16;
@@ -189,7 +189,7 @@ void push_a() {
   c_flag = 0;
   reg_pc = (++reg_pc) % 16;
 }
-void out_a_im() {
+void wrt__a_im() {
   ram[reg_a] = rom[reg_pc] & 0b00001111;
   c_flag = 0;
   reg_pc = (++reg_pc) % 16;
@@ -206,7 +206,7 @@ void pop_a() {
   }
   reg_pc = (++reg_pc) % 16;
 }
-void out_im_a() {
+void wrt__im_a() {
   ram[rom[reg_pc] & 0b00001111] = reg_a;
   c_flag = 0;
   reg_pc = (++reg_pc) % 16;
@@ -249,8 +249,8 @@ void init_display_opcode() {
       case MOV_A_B:
         snprintf(&str_op[i][0], 12, "MOV  A , B ");
         break;
-      case IN_A_Im:
-        snprintf(&str_op[i][0], 12, "IN   A ,[%X]", rom[i] & 0b00001111);
+      case READ_A_Im:
+        snprintf(&str_op[i][0], 12, "READ A ,[%X]", rom[i] & 0b00001111);
         break;
       case MOV_A_Im:
         snprintf(&str_op[i][0], 12, "MOV  A , %X ", rom[i] & 0b00001111);
@@ -261,8 +261,8 @@ void init_display_opcode() {
       case ADD_B_Im:
         snprintf(&str_op[i][0], 12, "ADD  B , %X ", rom[i] & 0b00001111);
         break;
-      case IN_B_Im:
-        snprintf(&str_op[i][0], 12, "IN   B ,[%X]", rom[i] & 0b00001111);
+      case READ_B_Im:
+        snprintf(&str_op[i][0], 12, "READ B ,[%X]", rom[i] & 0b00001111);
         break;
       case MOV_B_Im:
         snprintf(&str_op[i][0], 12, "MOV  B , %X ", rom[i] & 0b00001111);
@@ -270,14 +270,14 @@ void init_display_opcode() {
       case PUSH_A:
         snprintf(&str_op[i][0], 12, "PUSH A     ");
         break;
-      case OUT_A_Im:
-        snprintf(&str_op[i][0], 12, "OUT [A], %X ", rom[i] & 0b00001111);
+      case WRT_A_Im:
+        snprintf(&str_op[i][0], 12, "WRT [A], %X ", rom[i] & 0b00001111);
         break;
       case POP_A:
         snprintf(&str_op[i][0], 12, "POP  A     ");
         break;
-      case OUT_Im_A:
-        snprintf(&str_op[i][0], 12, "OUT [%X], A ", rom[i] & 0b00001111);
+      case WRT_Im_A:
+        snprintf(&str_op[i][0], 12, "WRT [%X], A ", rom[i] & 0b00001111);
         break;
       case ADDS:
         snprintf(&str_op[i][0], 12, "ADDS       ");
@@ -312,8 +312,8 @@ void display_opcode(uint8_t x, uint8_t y, uint8_t addr) {
     case MOV_A_B:
       snprintf(str_op_tmp, 12, "MOV  A , B ");
       break;
-    case IN_A_Im:
-      snprintf(str_op_tmp, 12, "IN   A ,[%X]", rom[addr] & 0b00001111);
+    case READ_A_Im:
+      snprintf(str_op_tmp, 12, "READ A ,[%X]", rom[addr] & 0b00001111);
       break;
     case MOV_A_Im:
       snprintf(str_op_tmp, 12, "MOV  A , %X ", rom[addr] & 0b00001111);
@@ -324,8 +324,8 @@ void display_opcode(uint8_t x, uint8_t y, uint8_t addr) {
     case ADD_B_Im:
       snprintf(str_op_tmp, 12, "ADD  B , %X ", rom[addr] & 0b00001111);
       break;
-    case IN_B_Im:
-      snprintf(str_op_tmp, 12, "IN   B ,[%X]", rom[addr] & 0b00001111);
+    case READ_B_Im:
+      snprintf(str_op_tmp, 12, "READ B ,[%X]", rom[addr] & 0b00001111);
       break;
     case MOV_B_Im:
       snprintf(str_op_tmp, 12, "MOV  B , %X ", rom[addr] & 0b00001111);
@@ -333,14 +333,14 @@ void display_opcode(uint8_t x, uint8_t y, uint8_t addr) {
     case PUSH_A:
       snprintf(str_op_tmp, 12, "PUSH A     ");
       break;
-    case OUT_A_Im:
-      snprintf(str_op_tmp, 12, "OUT [A], %X ", rom[addr] & 0b00001111);
+    case WRT_A_Im:
+      snprintf(str_op_tmp, 12, "WRT [A], %X ", rom[addr] & 0b00001111);
       break;
     case POP_A:
       snprintf(str_op_tmp, 12, "POP  A     ");
       break;
-    case OUT_Im_A:
-      snprintf(str_op_tmp, 12, "OUT [%X], A ", rom[addr] & 0b00001111);
+    case WRT_Im_A:
+      snprintf(str_op_tmp, 12, "WRT [%X], A ", rom[addr] & 0b00001111);
       break;
     case ADDS:
       snprintf(str_op_tmp, 12, "ADDS       ");
@@ -460,7 +460,7 @@ void display_5() {
 void display_1() {
   uint8_t address = 0x00;
   uint8_t bit = 0;
-  uint8_t num = 0;
+  uint8_t num = num_save;
   uint8_t cng_flag = 1;
   lcd.cursor();
   while (display == rom_input) {
@@ -630,6 +630,7 @@ void display_3() {
       default:
         break;
     }
+    num_save = arrow;
     delay(ttn);
   }
 }
@@ -693,7 +694,7 @@ void setup() {
   //LCD初期化
   lcd.begin(16, 2);
   lcd.setCursor(0, 0);
-  lcd.print("TD4EX2 Ver1.06");
+  lcd.print("TD4EX2 Ver1.07");
   delay(1000);
 
   while (display != run_pgm) {
@@ -739,8 +740,8 @@ void loop() {
     case MOV_A_B:
       mov_a_b();
       break;
-    case IN_A_Im:
-      in_a_im();
+    case READ_A_Im:
+      read_a_im();
       break;
     case MOV_A_Im:
       mov_a_im();
@@ -751,8 +752,8 @@ void loop() {
     case ADD_B_Im:
       add_b_im();
       break;
-    case IN_B_Im:
-      in_b_im();
+    case READ_B_Im:
+      read_b_im();
       break;
     case MOV_B_Im:
       mov_b_im();
@@ -760,14 +761,14 @@ void loop() {
     case PUSH_A:
       push_a();
       break;
-    case OUT_A_Im:
-      out_a_im();
+    case WRT_A_Im:
+      wrt__a_im();
       break;
     case POP_A:
       pop_a();
       break;
-    case OUT_Im_A:
-      out_im_a();
+    case WRT_Im_A:
+      wrt__im_a();
       break;
     case ADDS:
       adds();
