@@ -703,9 +703,9 @@ void setup() {
   pinMode( 1, OUTPUT);
   pinMode( 2, OUTPUT);
   pinMode( 3, OUTPUT);
-  pinMode(11,  INPUT);
-  pinMode(12,  INPUT);
-  pinMode(13,  INPUT);
+  pinMode(11, INPUT_PULLUP);
+  pinMode(12, INPUT_PULLUP);
+  pinMode(13, INPUT_PULLUP);
 
   //ROM初期化
   rom_init();
@@ -714,7 +714,7 @@ void setup() {
   //LCD初期化
   lcd.begin(16, 2);
   lcd.setCursor(0, 0);
-  lcd.print("TD4EX2 Ver1.12");
+  lcd.print("TD4EX2 Ver1.13");
   delay(1000);
 
   while (display != run_pgm) {
