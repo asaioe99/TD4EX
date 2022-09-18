@@ -7,13 +7,13 @@
 #define MOV_A_Im  0b0011
 #define MOV_B_A   0b0100
 #define ADD_B_Im  0b0101
-#define READ_B_Im 0b0110
+#define IN_B      0b0110
 #define MOV_B_Im  0b0111
 #define PUSH_A    0b1000
 #define WRT_A_Im  0b1001
 #define POP_A     0b1010
 #define WRT_Im_A  0b1011
-#define ADDS      0b1100
+#define OUT_Im    0b1100
 #define JC_Im     0b1101
 #define JNC_Im    0b1110
 #define JMP_Im    0b1111
@@ -76,7 +76,7 @@ int read_LCD_buttons(int adc_key_in) {
   return ERRORR;
 }
 
-// EEPROM内のデータ構造
+// EEPROM内のデータ構造(未実装機能多数、競技者の情報を保存し調査可能にしたい)
 //n+00 ROM[0]
 //n+0f ROM[F]
 //n+10 score & b1111 0000 0000 0000
@@ -114,7 +114,7 @@ void ram_init() {
 }
 
 void add_a_im() {
-  int8_t tmp = rom[reg_pc] & 0b00001111;
+  uint8_t tmp = rom[reg_pc] & 0b00001111;
   reg_a += tmp;
   if (reg_a > 0b1111) {
     c_flag = 1;
@@ -125,7 +125,7 @@ void add_a_im() {
   reg_pc = (++reg_pc) % 16;
 }
 void mov_a_b() {
-  int32_t tmp = rom[reg_pc] & 0b00001111;
+  uint8_t tmp = rom[reg_pc] & 0b00001111;
   reg_a = reg_b + tmp;
   if (reg_a > 0b1111) {
     c_flag = 1;
@@ -146,7 +146,7 @@ void mov_a_im() {
   reg_pc = (++reg_pc) % 16;
 }
 void mov_b_a() {
-  int32_t tmp = rom[reg_pc] & 0b00001111;
+  uint8_t tmp = rom[reg_pc] & 0b00001111;
   reg_b = reg_a + tmp;
   if (reg_b > 0b1111) {
     c_flag = 1;
@@ -157,7 +157,7 @@ void mov_b_a() {
   reg_pc = (++reg_pc) % 16;
 }
 void add_b_im() {
-  int32_t tmp = rom[reg_pc] & 0b00001111;
+  uint8_t tmp = rom[reg_pc] & 0b00001111;
   reg_b += tmp;
   if (reg_b > 0b1111) {
     c_flag = 1;
@@ -167,9 +167,19 @@ void add_b_im() {
   }
   reg_pc = (++reg_pc) % 16;
 }
-void read_b_im() {
-  reg_b = ram[rom[reg_pc] & 0b00001111];
-  c_flag = 0;
+void in_b() {
+  uint8_t tmp = rom[reg_pc] & 0b00001111;
+  reg_b  = 0b0000;
+  reg_b += digitalRead(11) << 0;
+  reg_b += digitalRead(12) << 1;
+  reg_b += digitalRead(12) << 2;
+  reg_b += tmp;
+  if (reg_b > 0b1111) {
+    c_flag = 1;
+    reg_b = reg_b % 16;
+  } else {
+    c_flag = 0;
+  }
   reg_pc = (++reg_pc) % 16;
 }
 void mov_b_im() {
@@ -178,7 +188,7 @@ void mov_b_im() {
   reg_pc = (++reg_pc) % 16;
 }
 void push_a() {
-  int32_t tmp = rom[reg_pc] & 0b00001111;
+  uint8_t tmp = rom[reg_pc] & 0b00001111;
   ram[reg_sp] = reg_a + tmp;
   ram[reg_sp] = ram[reg_sp] % 16;
   if (reg_sp > 0) {
@@ -195,7 +205,7 @@ void wrt__a_im() {
   reg_pc = (++reg_pc) % 16;
 }
 void pop_a() {
-  int32_t tmp = rom[reg_pc] & 0b00001111;
+  uint8_t tmp = rom[reg_pc] & 0b00001111;
   reg_sp = (++reg_sp) % 16;
   reg_a = ram[reg_sp] + tmp;
   if (reg_a > 0b1111) {
@@ -211,11 +221,12 @@ void wrt__im_a() {
   c_flag = 0;
   reg_pc = (++reg_pc) % 16;
 }
-void adds() {
-  int32_t tmp = rom[reg_pc] & 0b00001111;
-  ram[(reg_sp + 2) % 16] += ram[(reg_sp + 1) % 16] + tmp;
-  ram[(reg_sp + 2) % 16] = ram[(reg_sp + 2) % 16] % 16;
-  reg_sp = (++reg_sp) % 16;
+void out_im() {
+  uint8_t tmp = rom[reg_pc] & 0b00001111;
+  digitalWrite(0, (ram[tmp] & 0b0001) >> 0); //下位
+  digitalWrite(1, (ram[tmp] & 0b0010) >> 1);
+  digitalWrite(2, (ram[tmp] & 0b0100) >> 2);
+  digitalWrite(3, (ram[tmp] & 0b1000) >> 3); //上位
   c_flag = 0;
   reg_pc = (++reg_pc) % 16;
 }
@@ -261,8 +272,8 @@ void init_display_opcode() {
       case ADD_B_Im:
         snprintf(&str_op[i][0], 12, "ADD  B , %X ", rom[i] & 0b00001111);
         break;
-      case READ_B_Im:
-        snprintf(&str_op[i][0], 12, "READ B ,[%X]", rom[i] & 0b00001111);
+      case IN_B:
+        snprintf(&str_op[i][0], 12, "IN   B     ", rom[i] & 0b00001111);
         break;
       case MOV_B_Im:
         snprintf(&str_op[i][0], 12, "MOV  B , %X ", rom[i] & 0b00001111);
@@ -279,8 +290,8 @@ void init_display_opcode() {
       case WRT_Im_A:
         snprintf(&str_op[i][0], 12, "WRT [%X], A ", rom[i] & 0b00001111);
         break;
-      case ADDS:
-        snprintf(&str_op[i][0], 12, "ADDS       ");
+      case OUT_Im:
+        snprintf(&str_op[i][0], 12, "OUT_Im     ");
         break;
       case JC_Im:
         snprintf(&str_op[i][0], 12, "JC   %X     ", rom[i] & 0b00001111);
@@ -324,8 +335,8 @@ void display_opcode(uint8_t x, uint8_t y, uint8_t addr) {
     case ADD_B_Im:
       snprintf(str_op_tmp, 12, "ADD  B , %X ", rom[addr] & 0b00001111);
       break;
-    case READ_B_Im:
-      snprintf(str_op_tmp, 12, "READ B ,[%X]", rom[addr] & 0b00001111);
+    case IN_B:
+      snprintf(str_op_tmp, 12, "IN   B     ", rom[addr] & 0b00001111);
       break;
     case MOV_B_Im:
       snprintf(str_op_tmp, 12, "MOV  B , %X ", rom[addr] & 0b00001111);
@@ -342,8 +353,8 @@ void display_opcode(uint8_t x, uint8_t y, uint8_t addr) {
     case WRT_Im_A:
       snprintf(str_op_tmp, 12, "WRT [%X], A ", rom[addr] & 0b00001111);
       break;
-    case ADDS:
-      snprintf(str_op_tmp, 12, "ADDS       ");
+    case OUT_Im:
+      snprintf(str_op_tmp, 12, "OUT_Im     ");
       break;
     case JC_Im:
       snprintf(str_op_tmp, 12, "JC   %X     ", rom[addr] & 0b00001111);
@@ -687,6 +698,15 @@ void display_4(uint32_t pc) {
 }
 
 void setup() {
+  // pin割り当て
+  pinMode( 0, OUTPUT);
+  pinMode( 1, OUTPUT);
+  pinMode( 2, OUTPUT);
+  pinMode( 3, OUTPUT);
+  pinMode(11,  INPUT);
+  pinMode(12,  INPUT);
+  pinMode(13,  INPUT);
+
   //ROM初期化
   rom_init();
   //RAM初期化
@@ -694,7 +714,7 @@ void setup() {
   //LCD初期化
   lcd.begin(16, 2);
   lcd.setCursor(0, 0);
-  lcd.print("TD4EX2 Ver1.07");
+  lcd.print("TD4EX2 Ver1.10");
   delay(1000);
 
   while (display != run_pgm) {
@@ -752,8 +772,8 @@ void loop() {
     case ADD_B_Im:
       add_b_im();
       break;
-    case READ_B_Im:
-      read_b_im();
+    case IN_B:
+      in_b();
       break;
     case MOV_B_Im:
       mov_b_im();
@@ -770,8 +790,8 @@ void loop() {
     case WRT_Im_A:
       wrt__im_a();
       break;
-    case ADDS:
-      adds();
+    case OUT_Im:
+      out_im();
       break;
     case JC_Im:
       jc_im();
