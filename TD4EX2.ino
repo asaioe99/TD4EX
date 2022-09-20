@@ -144,7 +144,6 @@ void read_a_b() {
   } else {
     c_flag = 0;
   }
-  c_flag = 0;
   reg_pc = (++reg_pc) % 16;
 }
 void mov_a_im() {
@@ -206,7 +205,7 @@ void push_a() {
   c_flag = 0;
   reg_pc = (++reg_pc) % 16;
 }
-void wrt__a_im() {
+void wrt_a_im() {
   ram[reg_a] = rom[reg_pc] & 0b00001111;
   c_flag = 0;
   reg_pc = (++reg_pc) % 16;
@@ -789,7 +788,7 @@ void loop() {
       push_a();
       break;
     case WRT_A_Im:
-      wrt__a_im();
+      wrt_a_im();
       break;
     case POP_A:
       pop_a();
