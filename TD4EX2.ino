@@ -136,7 +136,14 @@ void mov_a_b() {
   reg_pc = (++reg_pc) % 16;
 }
 void read_a_b() {
-  reg_a = ram[reg_b];
+  uint8_t tmp = rom[reg_pc] & 0b00001111;
+  reg_a = ram[reg_b] + tmp;
+  if (reg_a > 0b1111) {
+    c_flag = 1;
+    reg_a = reg_a % 16;
+  } else {
+    c_flag = 0;
+  }
   c_flag = 0;
   reg_pc = (++reg_pc) % 16;
 }
