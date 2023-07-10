@@ -376,7 +376,7 @@ void loop() {
     case MOV_B_A:
       mov_b_a();
       break;
-    case ADD_B_Im:
+    case ADD_B_Im: 
       add_b_im();
       break;
     case IN_B_Im:
